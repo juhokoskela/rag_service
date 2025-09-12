@@ -79,6 +79,48 @@ class IngestionService:
             logger.error(f"Document ingestion failed: {e}")
             raise
 
+    async def ingest_documents_with_embeddings(
+        self,
+        documents: List[Dict[str, Any]],
+        embeddings: List[List[float]]
+    ) -> List[Document]:
+        """Ingest documents that already have computed embeddings."""
+        if len(documents) != len(embeddings):
+            raise ValueError(f"Documents count ({len(documents)}) must match embeddings count ({len(embeddings)})")
+        
+        created_documents = []
+        
+        try:
+            for doc_data, embedding in zip(documents, embeddings):
+                content = doc_data.get('content', '').strip()
+                if not content:
+                    logger.warning("Skipping document with empty content")
+                    continue
+                
+                # Create document object
+                doc = Document(
+                    id=uuid.uuid4(),
+                    content=content,
+                    metadata=doc_data.get('metadata', {})
+                )
+                
+                # Add pre-computed embedding
+                setattr(doc, 'embedding', embedding)
+                
+                # Save to database
+                created_doc = await self.document_repo.create_document(doc)
+                created_documents.append(created_doc)
+            
+            # Invalidate search caches
+            await redis_cache.invalidate_search_cache()
+            
+            logger.info(f"Successfully ingested {len(created_documents)} documents with pre-computed embeddings")
+            return created_documents
+            
+        except Exception as e:
+            logger.error(f"Batch ingestion with embeddings failed: {e}")
+            raise
+
     async def ingest_documents_batch(
         self,
         documents: List[Dict[str, Any]],

@@ -243,7 +243,31 @@ async def create_batch_job(
             cache_repo = get_embedding_cache_repository()
             batch_service = BatchEmbeddingService(cache_repo)
             
+            # Prepare document chunks for storage
+            chunk_documents = []
+            chunk_index = 0
+            for doc_request in doc_requests:
+                chunks = chunking_service.chunk_text(doc_request.content)
+                for chunk in chunks:
+                    # Create document data that matches chunk content
+                    chunk_doc = {
+                        "content": chunk.content,
+                        "metadata": {
+                            **doc_request.metadata,
+                            "char_count": len(chunk.content),
+                            "chunk_count": len(chunks),
+                            "chunk_index": chunk_index,
+                            "token_count": chunk.token_count
+                        }
+                    }
+                    chunk_documents.append(chunk_doc)
+                    chunk_index += 1
+            
             job_info = await batch_service.create_batch_embedding_job(all_texts)
+            
+            # Store original documents in the batch service for later retrieval
+            if job_info["job_id"] in batch_service._active_batches:
+                batch_service._active_batches[job_info["job_id"]]["original_documents"] = chunk_documents
             
             # Store job info for later processing
             # In production, store this in database/Redis
@@ -273,6 +297,67 @@ async def create_batch_job(
     except Exception as e:
         logger.error(f"Batch job creation failed: {e} [{correlation_id}]")
         raise HTTPException(status_code=500, detail="Failed to create batch job")
+
+@router.post("/batch-job/{job_id}/complete", operation_id="complete_batch_job")
+async def complete_batch_job(
+    job_id: str,
+    request: Request,
+    ingestion_service: IngestionService = Depends(get_ingestion_service)
+):
+    """Complete a batch job by storing documents with their embeddings."""
+    correlation_id = getattr(request.state, 'correlation_id', 'unknown')
+    
+    try:
+        from src.services.batch_embedding import BatchEmbeddingService
+        from src.api.dependencies import get_embedding_cache_repository
+        
+        cache_repo = get_embedding_cache_repository()
+        batch_service = BatchEmbeddingService(cache_repo)
+        
+        # Check if job is completed
+        status_info = await batch_service.get_batch_status(job_id)
+        if status_info["status"] != "completed":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Batch job is not completed yet. Current status: {status_info['status']}"
+            )
+        
+        # Get embeddings and original documents 
+        job_info = batch_service._active_batches.get(job_id)
+        if not job_info:
+            raise HTTPException(
+                status_code=404,
+                detail="Batch job data not found. Job may have been cleaned up."
+            )
+        
+        embeddings = await batch_service.get_batch_results(job_id)
+        original_docs = job_info.get('original_documents', [])
+        
+        if not original_docs:
+            raise HTTPException(
+                status_code=400,
+                detail="Original document data not found for batch job"
+            )
+        
+        # Store documents with embeddings
+        created_docs = await ingestion_service.ingest_documents_with_embeddings(
+            original_docs, embeddings
+        )
+        
+        logger.info(f"Completed batch job {job_id}: stored {len(created_docs)} documents [{correlation_id}]")
+        
+        return {
+            "job_id": job_id,
+            "status": "completed",
+            "documents_created": len(created_docs),
+            "document_ids": [str(doc.id) for doc in created_docs]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to complete batch job {job_id}: {e} [{correlation_id}]")
+        raise HTTPException(status_code=500, detail="Failed to complete batch job")
 
 @router.get("/batch-job/{job_id}")
 async def get_batch_job_status(

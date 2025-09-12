@@ -35,6 +35,7 @@ class BM25SearchService:
             # Ensure corpus is properly formatted for bm25s
             if not corpus:
                 logger.warning("No documents found for BM25 index")
+                self.index = None
                 return
             
             # Validate corpus format - each doc should be a list of strings
@@ -62,6 +63,11 @@ class BM25SearchService:
         """Perform BM25 search."""
         if self.index is None:
             await self.build_index()
+        
+            # If still no index after building (no documents), return empty results                                                                     │ │
+            if self.index is None:                                                                                                                      │ │
+            logger.warning("BM25 search: No documents available for search")                                                                        │ │
+            return []   
 
         try:
             query_tokens = self._preprocess_text(query)
