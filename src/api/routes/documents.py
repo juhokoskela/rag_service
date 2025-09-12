@@ -245,20 +245,13 @@ async def create_batch_job(
             
             # Prepare document chunks for storage
             chunk_documents = []
-            chunk_index = 0
             for doc_request in doc_requests:
-                chunks = chunking_service.chunk_text(doc_request.content)
+                chunks = chunking_service.chunk_text(doc_request.content, doc_request.metadata)
                 for chunk in chunks:
                     # Create document data that matches chunk content
                     chunk_doc = {
                         "content": chunk.content,
-                        "metadata": {
-                            **doc_request.metadata,
-                            "char_count": len(chunk.content),
-                            "chunk_count": len(chunks),
-                            "chunk_index": chunk_index,
-                            "token_count": chunk.token_count
-                        }
+                        "metadata": chunk.metadata
                     }
                     chunk_documents.append(chunk_doc)
                     chunk_index += 1
