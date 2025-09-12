@@ -1,6 +1,6 @@
-# RAG Retrieval Service
+# RAG service for LLM tool use
 
-A focused RAG (Retrieval-Augmented Generation) service that handles document ingestion and hybrid search. This service provides intelligent document retrieval using vector similarity and BM25 search with reranking capabilities.
+A focused RAG service that handles document ingestion and hybrid search. This service provides intelligent document retrieval using vector similarity and BM25 search with reranking capabilities.
 
 ## Features
 
@@ -47,13 +47,13 @@ A focused RAG (Retrieval-Augmented Generation) service that handles document ing
    make health
    ```
 
-The API will be available at `http://localhost:8000` with documentation at `http://localhost:8000/docs`.
+The API will be available at `http://localhost:8000` with documentation at `http://localhost:8000/docs` (WIP).
 
 ## Adding Documents
 
 ### Easy Document Submission
 
-Instead of using curl, you can now easily add documents using several methods:
+Instead of using curl, you can easily add documents using several methods:
 
 #### 1. Command Line Script
 ```bash
@@ -78,7 +78,7 @@ curl -X POST "http://localhost:8000/api/v1/documents/upload" \
   -F 'metadata={"source": "upload"}'
 ```
 
-#### 3. Batch Processing (50% Cost Savings)
+#### 3. Batch Processing
 
 **Large Scale Processing with OpenAI Batch API:**
 ```bash
@@ -117,7 +117,7 @@ curl "http://localhost:8000/api/v1/documents/batch-job/{job_id}"
 
 #### 4. Zendesk FAQ Import
 
-**Import FAQ articles directly from Zendesk with Batch API (50% cost savings):**
+**Import FAQ articles directly from Zendesk with Batch API:**
 ```bash
 # Set up Zendesk credentials
 export ZENDESK_SUBDOMAIN=your-company
@@ -128,7 +128,7 @@ export ZENDESK_TOKEN=your-api-token
 python scripts/import_zendesk_faqs.py
 
 # Import specific category
-python scripts/import_zendesk_faqs.py --category-id 123456 --service-type tmi
+python scripts/import_zendesk_faqs.py --category-id 123456 --service-type your_service
 
 # Import without batch API (individual processing)
 python scripts/import_zendesk_faqs.py --no-batch
@@ -277,7 +277,7 @@ REDIS_SSL=true
 ```
 
 ### Local Development
-The default `.env.example` values work perfectly for local Docker development - no changes needed!
+The default `.env.example` values work perfectly for local Docker development, no changes needed.
 
 ## Development
 
@@ -360,17 +360,8 @@ make clean
   - Configure proper CORS origins (not `*` in production)
 - **Monitoring:**
   - Health check endpoints are available for load balancers
-  - Structured logging with correlation IDs
+  - Structured logging
   - Consider adding metrics endpoints for monitoring
-
-### Cloud Deployment Examples
-
-Your flexible configuration makes it easy to deploy anywhere:
-
-- **AWS**: ECS/EKS with RDS and ElastiCache
-- **Google Cloud**: Cloud Run with Cloud SQL and Memorystore  
-- **Azure**: Container Instances with Azure Database and Azure Cache
-- **Self-hosted**: Any container orchestrator with managed databases
 
 4. **Add this service as a tool an LLM can call**
 
