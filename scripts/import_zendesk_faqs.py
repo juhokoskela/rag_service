@@ -4,7 +4,7 @@ Import FAQ articles from Zendesk into the RAG service.
 
 Usage:
     python scripts/import_zendesk_faqs.py
-    python scripts/import_zendesk_faqs.py --category-id 123456 --service-type tmi
+    python scripts/import_zendesk_faqs.py --category-id your_category_id --service-type your_service_type
     python scripts/import_zendesk_faqs.py --dry-run
 """
 
