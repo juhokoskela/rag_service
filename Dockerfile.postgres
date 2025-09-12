@@ -1,0 +1,42 @@
+FROM postgres:17
+
+# Install build dependencies and pgvector
+RUN apt-get update && \
+    apt-get install -y \
+        git \
+        build-essential \
+        postgresql-server-dev-17 \
+        wget \
+        ca-certificates && \
+    # Clone and build pgvector (use latest version that supports >2000 dimensions)
+    cd /tmp && \
+    git clone https://github.com/pgvector/pgvector.git && \
+    cd pgvector && \
+    # Use the latest master branch (ensures we get the newest version)
+    git checkout master && \
+    echo "Building pgvector version:" && \
+    git describe --tags --always && \
+    make clean && \
+    make OPTFLAGS="" && \
+    make install && \
+    # Verify installation
+    echo "pgvector installed successfully" && \
+    # Clean up build dependencies but keep the extension
+    cd / && \
+    rm -rf /tmp/pgvector && \
+    apt-get remove -y git build-essential postgresql-server-dev-17 wget && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install envsubst for template substitution
+RUN apt-get update && \
+    apt-get install -y gettext-base && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy dynamic initialization script
+COPY scripts/generate_init_script.sh /docker-entrypoint-initdb.d/01-generate-init.sh
+
+# Make script executable
+RUN chmod +x /docker-entrypoint-initdb.d/01-generate-init.sh
