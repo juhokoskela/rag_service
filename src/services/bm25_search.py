@@ -63,11 +63,11 @@ class BM25SearchService:
         """Perform BM25 search."""
         if self.index is None:
             await self.build_index()
-        
-            # If still no index after building (no documents), return empty results                                                                     │ │
-            if self.index is None:                                                                                                                      │ │
-            logger.warning("BM25 search: No documents available for search")                                                                        │ │
-            return []   
+
+            # If still no index after building (no documents), return empty results
+            if self.index is None:
+                logger.warning("BM25 search: No documents available for search")
+                return []   
 
         try:
             query_tokens = self._preprocess_text(query)
