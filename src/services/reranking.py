@@ -82,11 +82,12 @@ class RerankingService:
             
             # Update results with new scores
             for i, result in enumerate(results):
-                result.score = float(scores[i])
+                rerank_score = float(scores[i])  # Cast numpy scalar to native float
+                result.score = rerank_score
                 result.rank_explanation = {
                     **result.rank_explanation,
                     "rerank_method": "local",
-                    "rerank_score": scores[i]
+                    "rerank_score": rerank_score
                 }
             
             # Sort by new scores

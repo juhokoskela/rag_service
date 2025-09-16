@@ -1,10 +1,12 @@
 import pytest
+import numpy as np
 from unittest.mock import Mock, AsyncMock
 from src.services.embedding import EmbeddingService
 from src.services.chunking import ChunkingService
 from src.services.bm25_search import BM25SearchService
+from src.services.reranking import RerankingService
 from src.repositories.embedding_cache_repository import EmbeddingCacheRepository
-from src.core.models import Document
+from src.core.models import Document, SearchResult
 
 
 @pytest.mark.asyncio
@@ -101,3 +103,23 @@ async def test_bm25_search_returns_results_for_matching_query():
 
     assert len(results) > 0
     assert "rastikirjanpito" in results[0].document.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_rerank_local_casts_numpy_scores_to_python_float():
+    """Ensure reranking stores native floats for serialization."""
+    service = RerankingService()
+    service._load_local_reranker = lambda: None  # Skip heavy model load
+    service.local_reranker = Mock()
+    service.local_reranker.predict.return_value = np.array([np.float32(0.42)])
+
+    result = SearchResult(
+        document=Document(content="Test", metadata={}),
+        score=0.1,
+        rank_explanation={}
+    )
+
+    reranked = await service.rerank_local("query", [result])
+
+    assert isinstance(reranked[0].score, float)
+    assert isinstance(reranked[0].rank_explanation["rerank_score"], float)
