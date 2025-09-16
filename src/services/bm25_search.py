@@ -81,16 +81,25 @@ class BM25SearchService:
             actual_k = min(limit, len(self.documents)) if self.documents else 1
             results = self.index.retrieve([query_tokens], k=actual_k)
             
-            # Handle bm25s return format (indices, scores)
+            # Handle bm25s return format which changed between versions
             if isinstance(results, tuple):
                 indices, scores = results
             else:
-                indices = getattr(results, 'indices', None)
+                # "documents" is the field exposed by bm25s>=0.3.0, while
+                # earlier versions exposed "indices". Support both.
+                indices = getattr(results, 'documents', None)
+                if indices is None:
+                    indices = getattr(results, 'indices', None)
                 scores = getattr(results, 'scores', None)
-            
+
+            if isinstance(indices, np.ndarray):
+                indices = indices.tolist()
+            if isinstance(scores, np.ndarray):
+                scores = scores.tolist()
+
             if indices is None or scores is None:
                 return []
-            
+
             # If batched results, take first batch
             if hasattr(indices, '__len__') and len(indices) > 0 and hasattr(indices[0], '__len__'):
                 indices = indices[0]

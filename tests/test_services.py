@@ -2,7 +2,9 @@ import pytest
 from unittest.mock import Mock, AsyncMock
 from src.services.embedding import EmbeddingService
 from src.services.chunking import ChunkingService
+from src.services.bm25_search import BM25SearchService
 from src.repositories.embedding_cache_repository import EmbeddingCacheRepository
+from src.core.models import Document
 
 
 @pytest.mark.asyncio
@@ -81,4 +83,21 @@ def test_cosine_similarity():
     zero_vec = [0.0, 0.0, 0.0]
     similarity = service.cosine_similarity(zero_vec, vec)
     assert similarity == 0.0
-    
+
+
+@pytest.mark.asyncio
+async def test_bm25_search_returns_results_for_matching_query():
+    """Ensure BM25 search returns documents when tokens align."""
+
+    class FakeDocumentRepository:
+        async def get_all_documents(self, limit=None):
+            return [
+                Document(content="Rastikirjanpito TMI hinta ja maksut", metadata={}),
+                Document(content="Taysin eri aiheesta kertova dokumentti", metadata={}),
+            ]
+
+    service = BM25SearchService(FakeDocumentRepository())
+    results = await service.search("rastikirjanpito tmi hinta", limit=2)
+
+    assert len(results) > 0
+    assert "rastikirjanpito" in results[0].document.content.lower()
