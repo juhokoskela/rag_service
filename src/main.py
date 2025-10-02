@@ -13,7 +13,7 @@ from src.core.config import settings
 from src.infrastructure.postgres import initialize_database, close_database
 from src.infrastructure.redis import initialize_redis, close_redis
 from src.api.routes import search, documents, health
-from src.api.middleware import add_correlation_id, log_requests
+from src.api.middleware import add_correlation_id, log_requests, enforce_authentication
 import src.core.exceptions as exceptions
 
 # Configure logging
@@ -77,9 +77,10 @@ app.add_middleware(
     allowed_hosts=["*"] if settings.debug else ["localhost", "127.0.0.1"]
 )
 
-# Custom middleware
-app.middleware("http")(add_correlation_id)
+# Custom middleware (last registered runs first)
 app.middleware("http")(log_requests)
+app.middleware("http")(enforce_authentication)
+app.middleware("http")(add_correlation_id)
 
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["health"])

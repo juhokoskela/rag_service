@@ -4,11 +4,11 @@ A focused RAG service that handles document ingestion and hybrid search. This se
 
 ## Features
 
-- **Document Management**: Add, update, and delete documents with metadata
+- **Document Management**: Add, update, soft-delete, and restore documents with metadata
 - **Hybrid Search**: Combines vector similarity search (pgvector) with BM25 keyword search
-- **Smart Reranking**: Uses Jina AI reranker for improved relevance
-- **High Performance**: PostgreSQL with HNSW indexes and Redis caching
-- **Production Ready**: Health checks, rate limiting, circuit breakers
+- **Smart Reranking**: Uses Jina AI reranker (or local fallback) with tunable payload caps
+- **High Performance**: PostgreSQL with HNSW indexes, Redis caching, and a persistent embedding cache
+- **Production Ready**: Health checks, configurable rate limiting, circuit breakers, structured logging
 - **Docker Support**: Full containerization with Docker Compose
 
 ## Quick Start
@@ -48,6 +48,12 @@ A focused RAG service that handles document ingestion and hybrid search. This se
    ```
 
 The API will be available at `http://localhost:8000` with documentation at `http://localhost:8000/docs` (WIP).
+
+## Authentication & Rate Limiting
+
+- **Authentication**: Optional middleware enforces `Authorization: Bearer …` headers when configured. Supply a shared secret via `RAG_API_TOKEN` or a JWT signing key via `RAG_JWT_SECRET` (+ optional audience/issuer). If both are set, the service verifies JWTs first and falls back to the shared token. The request middleware automatically propagates `x-correlation-id` so upstream systems can trace requests end-to-end.
+- **Rate Limiting**: All routes share a global SlowAPI limiter. Limits are enforced per client IP (default 60 requests/min) and are configurable with `RATE_LIMIT_PER_MINUTE`. Exceeding the threshold returns HTTP 429 with `Retry-After` headers.
+- **Circuit Breaking**: Critical network calls (OpenAI/Jina) go through a simple circuit breaker to stop cascading failures; monitor logs for `circuitbreaker` warnings when upstreams misbehave.
 
 ## Adding Documents
 
@@ -175,6 +181,12 @@ rag-service/
 - **BM25 Search**: Traditional keyword search for hybrid retrieval
 - **Jina Reranker**: Cross-encoder reranking for improved relevance
 
+### Data Lifecycle & Caching
+
+- **Soft Deletes**: Documents are never hard-deleted; instead we set `deleted_at` and filter them transparently. This keeps history for potential restores and analytics while letting the ingestion pipeline “undelete” records safely.
+- **Embedding Cache**: A two-tier cache stores embeddings in Redis (hot path) and PostgreSQL (durable). Each entry tracks `last_accessed` and `access_count`, so stale rows can be trimmed with the `EmbeddingCacheRepository.cleanup_old_cache` helper or a cron job.
+- **Redis Invalidation**: Document mutations automatically purge hybrid search caches to ensure fresh results without having to flush the entire Redis instance.
+
 ## API Endpoints
 
 ### Document Management
@@ -229,7 +241,14 @@ JINA_API_KEY=your_jina_api_key  # For reranking
 ENABLE_BM25=true               # Enable hybrid search
 BM25_WEIGHT=0.3               # BM25 vs vector weight
 VECTOR_WEIGHT=0.7
+RATE_LIMIT_PER_MINUTE=60      # SlowAPI per-IP throttle
+RERANK_TOP_K=10               # Max candidates sent to reranker
+RERANK_MAX_CHARS=600          # Max characters per candidate payload
 ```
+
+Tweak these knobs to balance relevance and latency. The default profile ranks the top 10 candidates with ~600-character payloads, which keeps Jina calls around 400 ms while preserving accuracy. Lower values reduce cost/latency further; higher values can improve recall at the expense of speed.
+
+Leave the authentication variables blank to disable middleware (default). When set, every request must include `Authorization: Bearer <token>` where the token is either the shared secret (`RAG_API_TOKEN`) or a JWT signed with `RAG_JWT_SECRET`.
 
 ### Production Deployment Examples
 
@@ -328,6 +347,21 @@ make health-detailed
 # Clean up everything
 make clean
 ```
+
+### Testing
+
+```bash
+# Run the fast smoke suite (no external services required)
+pytest
+
+# Exercise the embedding cache integration tests (requires Postgres + Redis running)
+pytest tests/test_embedding_cache_repository.py
+
+# Lint and type-check before committing
+make lint
+```
+
+The CI smoke tests spin up the app with strict asyncio mode, so ensure you have valid `.env` values (or set `OPENAI_API_KEY=dummy` with `ENABLE_BM25=true` to avoid outbound calls) when running locally.
 
 ## Production Deployment
 
@@ -453,7 +487,8 @@ OpenAI additionally supports the Responses API. Use whichever suits your needs t
 
 - **Vector vs BM25 weights**: Adjust `BM25_WEIGHT` and `VECTOR_WEIGHT`
 - **Chunking**: Tune `CHUNK_SIZE` and `CHUNK_OVERLAP` for your documents
-- **Reranking**: Enable with `JINA_API_KEY` for better relevance
+- **Reranking**: Enable with `JINA_API_KEY`, then use `RERANK_TOP_K` / `RERANK_MAX_CHARS` to keep Jina calls around ~400 ms
+- **Rate Limits**: Set `RATE_LIMIT_PER_MINUTE` per environment to protect the service under load
 
 ### Database Optimization
 
@@ -487,7 +522,7 @@ OpenAI additionally supports the Responses API. Use whichever suits your needs t
 1. **Slow search:**
    - Check index usage in query plans
    - Monitor Redis cache hit rates
-   - Consider adjusting search parameters
+   - Consider adjusting search parameters and rerank caps (`RERANK_TOP_K`, `RERANK_MAX_CHARS`)
 
 2. **High memory usage:**
    - Reduce batch sizes for embedding generation

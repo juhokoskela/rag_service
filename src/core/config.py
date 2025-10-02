@@ -71,11 +71,18 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     rate_limit_per_minute: int = 60
-    
+
     # Zendesk Integration (optional, for import scripts)
     zendesk_subdomain: Optional[str] = Field(default=None, alias="ZENDESK_SUBDOMAIN")
     zendesk_email: Optional[str] = Field(default=None, alias="ZENDESK_EMAIL")
     zendesk_token: Optional[str] = Field(default=None, alias="ZENDESK_TOKEN")
+
+    # API Authentication (optional)
+    api_auth_token: Optional[str] = Field(default=None, alias="RAG_API_TOKEN")
+    jwt_secret: Optional[str] = Field(default=None, alias="RAG_JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", alias="RAG_JWT_ALGORITHM")
+    jwt_audience: Optional[str] = Field(default=None, alias="RAG_JWT_AUDIENCE")
+    jwt_issuer: Optional[str] = Field(default=None, alias="RAG_JWT_ISSUER")
 
     @property
     def is_docker(self) -> bool:
