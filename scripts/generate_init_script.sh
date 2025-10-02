@@ -32,7 +32,7 @@ GRANT ALL PRIVILEGES ON SCHEMA public TO $POSTGRES_USER;
 
 -- Create documents table
 CREATE TABLE IF NOT EXISTS documents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     content TEXT NOT NULL,
     metadata JSONB DEFAULT '{}',
     embedding HALFVEC(3072),  -- halfvec type for OpenAI text-embedding-3-large (up to 4000 dimensions)
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
 -- Create embedding cache table
 CREATE TABLE IF NOT EXISTS embedding_cache (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     text_hash VARCHAR(64) UNIQUE NOT NULL,
     embedding HALFVEC(3072),
     model VARCHAR(255) NOT NULL,

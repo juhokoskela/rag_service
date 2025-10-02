@@ -31,6 +31,7 @@ def upgrade() -> None:
         sa.Column('embedding', sa.VARCHAR, nullable=True),  # Will store vector as string initially
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     )
     
     # Add vector column with proper type (3072 dimensions for text-embedding-3-large)
@@ -39,11 +40,13 @@ def upgrade() -> None:
     # Create embedding cache table for performance
     op.create_table(
         'embedding_cache',
-        sa.Column('id', sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column('content_hash', sa.String(64), nullable=False, unique=True),
+        sa.Column('id', UUID(as_uuid=True), primary_key=True, server_default=sa.text('uuid_generate_v4()')),
+        sa.Column('text_hash', sa.String(64), nullable=False, unique=True),
         sa.Column('embedding', sa.VARCHAR, nullable=False),  # Will convert to vector type
         sa.Column('model', sa.String(100), nullable=False, server_default='text-embedding-3-large'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('last_accessed', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('access_count', sa.Integer, nullable=False, server_default=sa.text('0')),
     )
     
     # Convert embedding cache column to vector type
@@ -58,10 +61,12 @@ def upgrade() -> None:
     
     # Metadata search support (GIN index for JSON)
     op.execute('CREATE INDEX documents_metadata_idx ON documents USING gin (metadata)')
+    op.execute('CREATE INDEX documents_deleted_at_idx ON documents (deleted_at)')
     
     # Embedding cache indexes
     op.execute('CREATE INDEX embedding_cache_embedding_hnsw_idx ON embedding_cache USING hnsw (embedding vector_cosine_ops)')
     op.execute('CREATE INDEX embedding_cache_model_idx ON embedding_cache (model)')
+    op.execute('CREATE INDEX embedding_cache_model_text_hash_idx ON embedding_cache (model, text_hash)')
     
     # Create trigger for updated_at timestamp
     op.execute('''

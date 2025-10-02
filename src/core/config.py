@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     # Reranking
     jina_api_key: Optional[str] = Field(default=None, alias="JINA_API_KEY")
     reranker_model: str = "jina-reranker-v2-base-multilingual"
+    rerank_top_k: int = Field(default=10, alias="RERANK_TOP_K")
+    rerank_max_chars: int = Field(default=600, alias="RERANK_MAX_CHARS")
     
     # Chunking
     chunk_size: int = 800

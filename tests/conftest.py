@@ -10,8 +10,8 @@ from httpx import AsyncClient, ASGITransport
 
 from src.main import app
 from src.core.config import settings
-from src.infrastructure.postgres import get_db_connection
-from src.infrastructure.redis import redis_cache
+from src.infrastructure.postgres import get_db_connection, initialize_database, db_pool
+from src.infrastructure.redis import redis_cache, initialize_redis, close_redis
 
 
 @pytest.fixture(scope="session")
@@ -47,16 +47,42 @@ async def client():
         print(f"Warning: Failed to cleanup services: {e}")
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_connection() -> AsyncGenerator[asyncpg.Connection, None]:
     """Create a database connection for testing."""
+    pool = getattr(db_pool, "_pool", None)
+    if pool is None or getattr(pool, "_closed", False):
+        db_pool._pool = None
+        try:
+            await initialize_database()
+        except Exception:
+            pytest.skip("Database not configured for tests")
     async with get_db_connection() as conn:
         yield conn
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def redis_client() -> AsyncGenerator[redis.Redis, None]:
     """Create a Redis client for testing."""
+    if not redis_cache.redis:
+        try:
+            await initialize_redis()
+        except Exception:
+            yield None
+            return
+    else:
+        try:
+            await redis_cache.redis.ping()
+        except Exception:
+            try:
+                await close_redis()
+            except Exception:
+                pass
+            try:
+                await initialize_redis()
+            except Exception:
+                yield None
+                return
     yield redis_cache.redis
 
 

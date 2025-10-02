@@ -38,8 +38,8 @@ class EmbeddingCacheRepository:
                 if row:
                     # Update access count and timestamp
                     await conn.execute(
-                        "UPDATE embedding_cache SET last_accessed = $1, access_count = $2 WHERE text_hash = $3",
-                        datetime.utcnow(), row['access_count'] + 1, text_hash
+                        "UPDATE embedding_cache SET last_accessed = $1, access_count = $2 WHERE text_hash = $3 AND model = $4",
+                        datetime.utcnow(), row['access_count'] + 1, text_hash, model
                     )
                     
                     # Parse embedding from string format
@@ -71,7 +71,7 @@ class EmbeddingCacheRepository:
                 
                 query = """
                 INSERT INTO embedding_cache (id, text_hash, embedding, model, created_at, last_accessed, access_count)
-                VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 1)
+                VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, 1)
                 ON CONFLICT (text_hash) DO UPDATE SET
                     embedding = EXCLUDED.embedding,
                     last_accessed = EXCLUDED.last_accessed,
